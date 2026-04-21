@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   autenticarUsuario,
   cerrarSesionUsuario,
   configurarPersistencia,
 } from "@/firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/firebase/client";
 
 type AuthUser = {
   email: string;
@@ -23,6 +25,21 @@ export default function LoginExam() {
   const [error, setError] = useState("");
   const [usuario, setUsuario] = useState<AuthUser | null>(null);
 
+  // sesion
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUsuario({
+          email: user.email || "",
+        });
+      } else {
+        setUsuario(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const tituloBoton = useMemo(() => {
     return cargando ? "Entrando..." : "Entrar";
   }, [cargando]);
@@ -30,78 +47,114 @@ export default function LoginExam() {
   async function procesarAcceso(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    // TODO: limpiar errores previos.
-    // TODO: validar campos vacíos.
-    // TODO: validar formato de correo.
-    // TODO: activar estado de carga.
-    // TODO: configurar persistencia según recordarme.
-    // TODO: autenticar usuario.
-    // TODO: guardar usuario autenticado en estado.
-    // TODO: limpiar estado de carga.
-    // TODO: manejar errores y mostrarlos en pantalla.
+    setError("");
+
+    // Valida campos
+    if (!correo || !contrasena) {
+      setError("Todos los campos son obligatorios");
+      return;
+    }
+
+    // Valida correo
+    if (!esCorreoValido(correo)) {
+      setError("El correo no es válido");
+      return;
+    }
+
+    try {
+      setCargando(true);
+
+      //Persistenci (Recordar)
+      await configurarPersistencia(recordarme);
+
+      // Login
+      const credenciales = await autenticarUsuario(correo, contrasena);
+
+      setUsuario({
+        email: credenciales.user.email || "",
+      });
+    } catch (err) {
+      setError("Correo o contraseña incorrectos");
+    } finally {
+      setCargando(false);
+    }
   }
 
   async function salir() {
-    // TODO: cerrar sesión en Firebase.
-    // TODO: limpiar el usuario en estado.
-    // TODO: limpiar formulario si se desea.
+    await cerrarSesionUsuario();
+    setUsuario(null);
+    setCorreo("");
+    setContrasena("");
+    setRecordarme(false);
   }
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
-      <section className="w-full max-w-md">
-        <div>
-          <h1>Acceso escolar</h1>
-          <p>Completa la funcionalidad de inicio de sesión.</p>
+      <section className="w-full max-w-md bg-white p-6 rounded-xl shadow">
+        <div className="mb-4 text-center">
+          <h1 className="text-xl font-bold">Acceso escolar</h1>
+          <p className="text-gray-500 text-sm">
+            Completa los datos para iniciar sesión.
+          </p>
         </div>
 
         {!usuario ? (
-          <form onSubmit={procesarAcceso}>
+          <form onSubmit={procesarAcceso} className="space-y-4">
             <div>
-              <label htmlFor="correo">Correo electrónico</label>
+              <label className="block text-sm">Correo electrónico</label>
               <input
-                id="correo"
                 type="email"
                 value={correo}
-                onChange={(event) => setCorreo(event.target.value)}
+                onChange={(e) => setCorreo(e.target.value)}
+                className="w-full border rounded px-3 py-2"
                 placeholder="alumno@correo.com"
               />
             </div>
 
             <div>
-              <label htmlFor="contrasena">Contraseña</label>
+              <label className="block text-sm">Contraseña</label>
               <input
-                id="contrasena"
                 type="password"
                 value={contrasena}
-                onChange={(event) => setContrasena(event.target.value)}
+                onChange={(e) => setContrasena(e.target.value)}
+                className="w-full border rounded px-3 py-2"
                 placeholder="******"
               />
             </div>
 
-            <label>
+            <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={recordarme}
-                onChange={(event) => setRecordarme(event.target.checked)}
+                onChange={(e) => setRecordarme(e.target.checked)}
               />
               Recordarme
             </label>
 
-            {error ? <div>{error}</div> : null}
+            {error && (
+              <div className="text-red-500 text-sm">{error}</div>
+            )}
 
-            <button type="submit" disabled={cargando} className="text-white">
+            <button
+              type="submit"
+              disabled={cargando}
+              className="w-full bg-black text-white py-2 rounded"
+            >
               {tituloBoton}
             </button>
           </form>
         ) : (
-          <div>
+          <div className="text-center space-y-4">
             <div>
-              <p>Inicio de sesión correcto</p>
-              <h2>Bienvenido, {usuario.email}</h2>
+              <p className="text-green-600">Inicio de sesión correcto</p>
+              <h2 className="font-bold">Bienvenido, {usuario.email}</h2>
             </div>
 
-            <button type="button" onClick={salir} className="">
+            <button
+              type="button"
+              onClick={salir}
+              className="w-full bg-black text-white py-2 rounded"
+            >
               Cerrar sesión
             </button>
           </div>
